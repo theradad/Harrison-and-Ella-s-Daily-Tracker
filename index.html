@@ -863,10 +863,10 @@ input  { font-family: var(--font-round); }
     <svg id="task-char-svg" class="sidebar-char" width="120" height="160" viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg"></svg>
   </div>
   <div class="task-main" id="task-main">
-    <button class="gear-btn" id="gear-btn" onclick="openParentPin()">⚙</button>
+    <button class="gear-btn" id="gear-btn" onclick="soundGear(); openParentPin()">⚙</button>
     <div class="task-top-bar">
       <div class="task-kid-name" id="task-kid-name"></div>
-      <button class="back-btn" onclick="goHome()">← BACK</button>
+      <button class="back-btn" onclick="soundBack(); goHome()">← BACK</button>
     </div>
     <div class="task-list" id="task-list"></div>
     <div class="progress-section">
@@ -1066,18 +1066,26 @@ function saveState() {
    AUDIO ENGINE — Web Audio API, cartoon tones
 ═══════════════════════════════════════════ */
 let audioCtx;
+let masterGain;
 function getAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1.0; // master volume boost
+    masterGain.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
 }
 
+/* Single tone */
 function playTone(freq, duration, type='sine', volume=0.3, delay=0) {
   try {
     const ctx = getAudio();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(masterGain);
     osc.type = type;
     osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
     gain.gain.setValueAtTime(volume, ctx.currentTime + delay);
@@ -1087,43 +1095,137 @@ function playTone(freq, duration, type='sine', volume=0.3, delay=0) {
   } catch(e) {}
 }
 
+/* Thicker "voice" — two detuned oscillators stacked for a fuller cartoon timbre */
+function playVoice(freq, duration, volume=0.3, delay=0, type='triangle') {
+  try {
+    const ctx = getAudio();
+    const gain = ctx.createGain();
+    gain.connect(masterGain);
+    gain.gain.setValueAtTime(volume, ctx.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+
+    const osc1 = ctx.createOscillator();
+    osc1.type = type;
+    osc1.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+    osc1.connect(gain);
+    osc1.start(ctx.currentTime + delay);
+    osc1.stop(ctx.currentTime + delay + duration);
+
+    const osc2 = ctx.createOscillator();
+    osc2.type = type;
+    osc2.frequency.setValueAtTime(freq * 1.005, ctx.currentTime + delay); // slight detune = thicker
+    osc2.connect(gain);
+    osc2.start(ctx.currentTime + delay);
+    osc2.stop(ctx.currentTime + delay + duration);
+
+    // sub-octave for body
+    const osc3 = ctx.createOscillator();
+    osc3.type = 'sine';
+    osc3.frequency.setValueAtTime(freq / 2, ctx.currentTime + delay);
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(volume * 0.4, ctx.currentTime + delay);
+    subGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+    osc3.connect(subGain);
+    subGain.connect(masterGain);
+    osc3.start(ctx.currentTime + delay);
+    osc3.stop(ctx.currentTime + delay + duration);
+  } catch(e) {}
+}
+
+/* Short noise burst — for clicks/pops */
+function playNoiseClick(duration=0.05, volume=0.25, delay=0) {
+  try {
+    const ctx = getAudio();
+    const bufferSize = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i=0; i<bufferSize; i++) {
+      data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 1500;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(volume, ctx.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGain);
+    noise.start(ctx.currentTime + delay);
+  } catch(e) {}
+}
+
 function soundCheckbox() {
-  // Cheerful rising ding
-  playTone(523, 0.08, 'sine', 0.25);
-  playTone(659, 0.08, 'sine', 0.25, 0.08);
-  playTone(784, 0.15, 'sine', 0.25, 0.16);
+  // Rich cheerful rising ding — fuller voice + sparkle
+  playVoice(523, 0.1, 0.4);
+  playVoice(659, 0.1, 0.4, 0.08);
+  playVoice(880, 0.22, 0.45, 0.16);
+  playTone(1318, 0.15, 'sine', 0.2, 0.18); // sparkle top note
+  playNoiseClick(0.03, 0.15, 0);
 }
 
 function soundUncheck() {
-  playTone(400, 0.08, 'sine', 0.15);
-  playTone(330, 0.12, 'sine', 0.15, 0.08);
+  playVoice(400, 0.1, 0.3);
+  playVoice(300, 0.14, 0.3, 0.07);
 }
 
 function soundPinKey() {
-  playTone(880, 0.05, 'sine', 0.15);
+  playTone(900, 0.06, 'square', 0.18);
+  playNoiseClick(0.02, 0.12, 0);
 }
 
 function soundPinError() {
-  playTone(200, 0.15, 'square', 0.2);
-  playTone(150, 0.2,  'square', 0.2, 0.15);
+  playVoice(220, 0.16, 0.35, 0, 'sawtooth');
+  playVoice(165, 0.22, 0.35, 0.15, 'sawtooth');
 }
 
 function soundPinSuccess() {
-  playTone(523, 0.1, 'sine', 0.25);
-  playTone(659, 0.1, 'sine', 0.25, 0.1);
-  playTone(784, 0.1, 'sine', 0.25, 0.2);
-  playTone(1047, 0.25, 'sine', 0.25, 0.3);
+  playVoice(523, 0.12, 0.4);
+  playVoice(659, 0.12, 0.4, 0.1);
+  playVoice(784, 0.12, 0.4, 0.2);
+  playVoice(1047, 0.3, 0.45, 0.3);
 }
 
 function soundCelebration() {
-  // Ascending fanfare
+  // Big ascending fanfare — louder, fuller, longer
   const notes = [523,659,784,1047,1319,1568];
-  notes.forEach((f,i) => playTone(f, 0.18, 'sine', 0.3, i*0.12));
-  // harmony
+  notes.forEach((f,i) => playVoice(f, 0.22, 0.45, i*0.12));
+  // harmony layer
   const harmony = [659,784,988,1319,1568,1976];
-  harmony.forEach((f,i) => playTone(f, 0.18, 'sine', 0.15, i*0.12));
-  // final chord
-  [523,659,784,1047].forEach(f => playTone(f, 0.5, 'sine', 0.2, 0.9));
+  harmony.forEach((f,i) => playTone(f, 0.2, 'triangle', 0.25, i*0.12));
+  // sparkle layer
+  const sparkle = [1568,1976,2349,3136];
+  sparkle.forEach((f,i) => playTone(f, 0.12, 'sine', 0.15, 0.5 + i*0.08));
+  // final big chord
+  [523,659,784,1047,1319].forEach(f => playVoice(f, 0.7, 0.35, 0.9));
+  // low boom for impact
+  playTone(130, 0.5, 'sine', 0.3, 0.9);
+}
+
+function soundBack() {
+  playVoice(440, 0.08, 0.25, 0, 'square');
+  playVoice(330, 0.1, 0.25, 0.05, 'square');
+}
+
+function soundGear() {
+  playTone(1200, 0.05, 'square', 0.2);
+  playTone(900, 0.07, 'square', 0.2, 0.05);
+}
+
+function soundTaskAdd() {
+  playVoice(660, 0.1, 0.35);
+  playVoice(990, 0.18, 0.4, 0.09);
+}
+
+function soundTaskDelete() {
+  playVoice(500, 0.07, 0.3, 0, 'sawtooth');
+  playVoice(350, 0.12, 0.3, 0.06, 'sawtooth');
+}
+
+function soundTap() {
+  playTone(700, 0.04, 'sine', 0.15);
 }
 
 /* ═══════════════════════════════════════════
@@ -1261,6 +1363,8 @@ function openKidPin(kid) {
 function openParentPin() {
   pinState.mode = 'parent-enter';
   pinState.entered = '';
+  pinState.confirm = '';
+  pinState.step = 'enter';
   pinState.kid = '';
 
   document.getElementById('pin-avatar-wrap').innerHTML = PARENT_ICON_SVG;
@@ -1407,6 +1511,7 @@ function goTaskFromPin() {
    CHAR TAP HANDLER
 ═══════════════════════════════════════════ */
 function handleCharTap(kid) {
+  soundTap();
   currentKid = kid;
   openKidPin(kid);
 }
@@ -1741,6 +1846,7 @@ function saveTask() {
   } else {
     tasks.push({ id: Date.now(), label: val, done: false });
   }
+  soundTaskAdd();
   saveState();
   closeTaskModal();
   renderEditList();
@@ -1751,6 +1857,7 @@ function deleteTask(idx) {
   const tasks = state.kids[editKid].tasks;
   if (tasks.length <= 1) { showToast('Need at least 1 task!'); return; }
   tasks.splice(idx, 1);
+  soundTaskDelete();
   saveState();
   renderEditList();
   showToast('Task removed');
