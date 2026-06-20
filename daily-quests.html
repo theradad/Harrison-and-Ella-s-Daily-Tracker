@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Daily Quests</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════
+   RESET & TOKENS
+═══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0D0D1A;
+  --surface:  #1A1A2E;
+  --surface2: #22223B;
+  --surface3: #2A2A4A;
+  --gold:     #FFD700;
+  --gold-dim: #8B6900;
+  --pink:     #FF85C2;
+  --pink-dim: #8B3A5A;
+  --cyan:     #00E5FF;
+  --white:    #F0F0FF;
+  --dim:      #6B6B8A;
+  --green:    #44FF88;
+  --red:      #FF4444;
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-round: 'Nunito', sans-serif;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--font-round);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+button { cursor: pointer; font-family: var(--font-round); }
+input  { font-family: var(--font-round); }
+
+/* ═══════════════════════════════════════════
+   SCREEN SYSTEM
+═══════════════════════════════════════════ */
+.screen {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: none;
+  flex-direction: column;
+}
+.screen.active { display: flex; }
+
+/* scanlines overlay on every screen */
+.screen::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px, transparent 3px,
+    rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px
+  );
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ═══════════════════════════════════════════
+   ANIMATIONS
+═══════════════════════════════════════════ */
+@keyframes pulse     { 0%,100%{opacity:1} 50%{opacity:0.25} }
+@keyframes bob       { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+@keyframes bobPeach  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+@keyframes shake     { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(6px)} }
+@keyframes popIn     { 0%{transform:scale(0.7);opacity:0} 70%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
+@keyframes slideUp   { 0%{transform:translateY(40px);opacity:0} 100%{transform:translateY(0);opacity:1} }
+@keyframes checkPop  { 0%{transform:scale(1)} 40%{transform:scale(1.4)} 100%{transform:scale(1)} }
+@keyframes danceMario { 0%,100%{transform:rotate(-8deg) translateY(0)} 50%{transform:rotate(8deg) translateY(-12px)} }
+@keyframes dancePeach { 0%,100%{transform:rotate(8deg) translateY(0)} 50%{transform:rotate(-8deg) translateY(-10px)} }
+@keyframes starSpin  { 0%{transform:rotate(0) scale(1)} 50%{transform:rotate(180deg) scale(1.3)} 100%{transform:rotate(360deg) scale(1)} }
+@keyframes fadeIn    { 0%{opacity:0} 100%{opacity:1} }
+@keyframes progressGrow { 0%{width:0} }
+
+/* ═══════════════════════════════════════════
+   HOME SCREEN
+═══════════════════════════════════════════ */
+#screen-home {
+  background: var(--bg);
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px 40px;
+  gap: 32px;
+}
+
+.home-title {
+  font-family: var(--font-pixel);
+  font-size: clamp(20px, 5vw, 28px);
+  color: var(--gold);
+  text-align: center;
+  line-height: 1.6;
+  text-shadow: 0 0 24px rgba(255,215,0,0.5), 4px 4px 0 var(--gold-dim);
+}
+
+.home-subtitle {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--cyan);
+  letter-spacing: 3px;
+  animation: pulse 1.6s ease-in-out infinite;
+  text-align: center;
+  margin-top: -16px;
+}
+
+.char-select-row {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.char-card {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 24px 18px 20px;
+  width: 200px;
+  border: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.15s, box-shadow 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.char-card:active { transform: scale(0.96); }
+.char-card.mario-card {
+  border-color: var(--gold);
+  box-shadow: 0 0 20px rgba(255,215,0,0.15);
+}
+.char-card.peach-card {
+  border-color: var(--pink);
+  box-shadow: 0 0 20px rgba(255,133,194,0.15);
+}
+
+.char-card .char-svg { animation: bob 2.2s ease-in-out infinite; }
+.char-card.peach-card .char-svg { animation: bobPeach 2.6s ease-in-out infinite; }
+
+.char-card-name {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  margin-top: 4px;
+}
+.mario-card .char-card-name { color: var(--gold); }
+.peach-card .char-card-name { color: var(--pink); }
+
+.char-card-progress {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dim);
+}
+
+.char-card-stars { font-size: 14px; letter-spacing: 2px; }
+
+.mini-bar-wrap { width: 100%; background: #111128; border-radius: 99px; height: 8px; overflow: hidden; margin-top: 2px; }
+.mini-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
+.mario-bar { background: var(--gold); }
+.peach-bar { background: var(--pink); }
+
+.lock-badge {
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+/* ═══════════════════════════════════════════
+   PIN SCREEN (shared for all PIN flows)
+═══════════════════════════════════════════ */
+#screen-pin {
+  background: var(--bg);
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  gap: 20px;
+  text-align: center;
+}
+
+.pin-avatar-wrap { margin-bottom: 4px; }
+
+.pin-title {
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.pin-subtitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dim);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.pin-dots {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin: 4px 0;
+}
+
+.pin-dot {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--dim);
+  background: #111128;
+  transition: background 0.1s, border-color 0.1s, transform 0.1s;
+}
+.pin-dot.filled { transform: scale(1.1); }
+.pin-dot.gold  { border-color: var(--gold); }
+.pin-dot.gold.filled  { background: var(--gold); border-color: var(--gold); }
+.pin-dot.pink  { border-color: var(--pink); }
+.pin-dot.pink.filled  { background: var(--pink); border-color: var(--pink); }
+.pin-dot.cyan  { border-color: var(--cyan); }
+.pin-dot.cyan.filled  { background: var(--cyan); border-color: var(--cyan); }
+
+.pin-error {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--red);
+  min-height: 20px;
+  animation: pulse 0.8s ease-in-out 3;
+}
+
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 240px;
+}
+
+.numpad-btn {
+  font-family: var(--font-round);
+  font-weight: 900;
+  font-size: 22px;
+  padding: 16px 0;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--surface3);
+  color: var(--white);
+  transition: background 0.1s, transform 0.1s;
+}
+.numpad-btn:active { background: var(--surface3); transform: scale(0.93); }
+.numpad-btn.del-btn { font-size: 16px; color: var(--dim); }
+
+.pin-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.btn-pill {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  padding: 13px 22px;
+  border-radius: 12px;
+  border: none;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.btn-pill:active { transform: scale(0.95); opacity: 0.85; }
+.btn-cancel  { background: var(--surface2); color: var(--dim); border: 1px solid var(--surface3); }
+.btn-gold    { background: var(--gold);  color: #0D0D1A; }
+.btn-pink    { background: var(--pink);  color: #0D0D1A; }
+.btn-cyan    { background: var(--cyan);  color: #0D0D1A; }
+
+/* ═══════════════════════════════════════════
+   TASK SCREEN
+═══════════════════════════════════════════ */
+#screen-task {
+  background: var(--bg);
+  flex-direction: row;
+}
+
+.task-sidebar {
+  width: 130px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 16px;
+  position: relative;
+}
+.task-sidebar.mario-side { background: linear-gradient(180deg, #181830 0%, #0D0D1A 100%); border-right: 1px solid #1E1E38; }
+.task-sidebar.peach-side { background: linear-gradient(180deg, #22102E 0%, #0D0D1A 100%); border-right: 1px solid #2A1A38; }
+
+.sidebar-char { display: block; }
+
+.task-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 20px 20px 18px;
+  gap: 14px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.task-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-kid-name {
+  font-family: var(--font-pixel);
+  font-size: clamp(11px, 3vw, 14px);
+}
+.task-kid-name.gold { color: var(--gold); text-shadow: 0 0 10px rgba(255,215,0,0.3); }
+.task-kid-name.pink { color: var(--pink); text-shadow: 0 0 10px rgba(255,133,194,0.3); }
+
+.back-btn {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--dim);
+  background: none;
+  border: 1px solid var(--surface3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.back-btn:active { color: var(--white); border-color: var(--white); }
+
+.gear-btn {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--dim);
+  opacity: 0.35;
+  transition: opacity 0.2s;
+  padding: 4px;
+  z-index: 10;
+}
+.gear-btn:hover { opacity: 0.7; }
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 15px 16px;
+  border: 1px solid var(--surface3);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--white);
+  transition: background 0.2s, border-color 0.2s, opacity 0.3s;
+  animation: slideUp 0.3s ease both;
+  user-select: none;
+}
+.task-item:active { opacity: 0.8; }
+.task-item.completed {
+  opacity: 0.45;
+  text-decoration: line-through;
+  text-decoration-color: rgba(255,255,255,0.3);
+}
+.task-item.completed.mario-theme { background: #111A00; border-color: rgba(255,215,0,0.3); }
+.task-item.completed.peach-theme { background: #1A0810; border-color: rgba(255,133,194,0.3); }
+
+.task-check {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  border: 2px solid;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 900;
+  transition: background 0.2s, border-color 0.2s;
+}
+.task-check.mario-check { border-color: var(--gold); color: #0D0D1A; }
+.task-check.mario-check.checked { background: var(--gold); animation: checkPop 0.3s ease; }
+.task-check.peach-check { border-color: var(--pink); color: #fff; }
+.task-check.peach-check.checked { background: var(--pink); animation: checkPop 0.3s ease; }
+
+.task-label { flex: 1; }
+
+.progress-section { margin-top: auto; padding-top: 8px; }
+.progress-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.progress-text { font-family: var(--font-pixel); font-size: 8px; color: var(--dim); }
+.progress-count { font-family: var(--font-pixel); font-size: 10px; }
+.progress-count.gold { color: var(--gold); }
+.progress-count.pink { color: var(--pink); }
+
+.progress-track { background: #111128; border-radius: 99px; height: 14px; overflow: hidden; }
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: progressGrow 0.6s ease;
+}
+.progress-fill.mario-prog { background: linear-gradient(90deg, #CC9900, var(--gold), #FFE55C); }
+.progress-fill.peach-prog { background: linear-gradient(90deg, #CC3388, var(--pink), #FFB3D9); }
+
+/* ═══════════════════════════════════════════
+   CELEBRATION SCREEN
+═══════════════════════════════════════════ */
+#screen-celebrate {
+  background: #070710;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px 40px;
+  gap: 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+#fireworks-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.celebrate-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.celebrate-title {
+  font-family: var(--font-pixel);
+  font-size: clamp(16px, 4vw, 22px);
+  color: var(--gold);
+  text-shadow: 0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.4), 4px 4px 0 var(--gold-dim);
+  line-height: 1.7;
+  animation: popIn 0.5s ease both;
+}
+
+.celebrate-chars {
+  display: flex;
+  gap: 48px;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.dance-mario { animation: danceMario 0.8s ease-in-out infinite; }
+.dance-peach { animation: dancePeach 0.9s ease-in-out infinite; }
+
+.celebrate-stars {
+  font-size: 32px;
+  letter-spacing: 6px;
+  animation: popIn 0.6s 0.3s ease both;
+}
+
+.celebrate-msg {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--white);
+  animation: popIn 0.6s 0.5s ease both;
+}
+
+.celebrate-tap {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--cyan);
+  animation: pulse 1.2s ease-in-out infinite;
+  margin-top: 8px;
+}
+
+/* confetti pieces */
+.confetti {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* ═══════════════════════════════════════════
+   PARENT EDIT SCREEN
+═══════════════════════════════════════════ */
+#screen-edit {
+  background: var(--bg);
+  padding: 28px 20px 40px;
+  gap: 16px;
+}
+
+.edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.edit-title {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--cyan);
+}
+
+.kid-tabs {
+  display: flex;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--cyan);
+}
+.kid-tab {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  padding: 9px 16px;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  transition: background 0.15s, color 0.15s;
+}
+.kid-tab.active { background: var(--cyan); color: #0D0D1A; }
+
+.edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.edit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--surface3);
+  animation: slideUp 0.2s ease both;
+}
+
+.edit-row-label {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.edit-row input[type="text"] {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--surface2);
+  border: 1px solid var(--cyan);
+  border-radius: 8px;
+  color: var(--white);
+  padding: 6px 10px;
+  outline: none;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  padding: 6px;
+  border-radius: 8px;
+  transition: background 0.15s;
+  color: var(--dim);
+}
+.icon-btn:active { background: var(--surface2); }
+
+.add-task-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px dashed var(--surface3);
+  border-radius: 12px;
+  padding: 16px;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--dim);
+  background: none;
+  width: 100%;
+  transition: border-color 0.15s, color 0.15s;
+}
+.add-task-btn:active { border-color: var(--cyan); color: var(--cyan); }
+
+.edit-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+/* ═══════════════════════════════════════════
+   MODALS (overlay)
+═══════════════════════════════════════════ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+.modal-overlay.open { display: flex; }
+
+.modal-box {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 360px;
+  border: 1px solid var(--surface3);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: popIn 0.3s ease;
+}
+
+.modal-title {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--cyan);
+  text-align: center;
+}
+
+.modal-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--surface3);
+  border-radius: 10px;
+  color: var(--white);
+  font-size: 16px;
+  font-weight: 700;
+  padding: 12px 14px;
+  outline: none;
+  font-family: var(--font-round);
+}
+.modal-input:focus { border-color: var(--cyan); }
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+#toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--surface);
+  border: 1px solid var(--surface3);
+  border-radius: 99px;
+  padding: 12px 24px;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--white);
+  z-index: 800;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+  opacity: 0;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* scrollbar styling */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 99px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════
+     SCREEN: HOME
+═══════════════════════════════ -->
+<div id="screen-home" class="screen active">
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:28px;padding:32px 20px 40px;">
+    <div>
+      <div class="home-title">DAILY<br>QUESTS</div>
+    </div>
+    <div class="home-subtitle">▸ TAP YOUR CHARACTER ◂</div>
+
+    <div class="char-select-row">
+      <!-- Harrison -->
+      <div class="char-card mario-card" id="card-harrison" onclick="handleCharTap('harrison')">
+        <div class="char-svg" id="home-mario-svg">
+          <!-- Mario SVG -->
+          <svg width="110" height="140" viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="50" cy="126" rx="22" ry="5" fill="rgba(0,0,0,0.4)"/>
+            <rect x="28" y="72" width="44" height="36" rx="6" fill="#1A4FBF"/>
+            <rect x="24" y="68" width="52" height="14" rx="5" fill="#E83030"/>
+            <rect x="36" y="64" width="28" height="20" rx="4" fill="#1A4FBF"/>
+            <circle cx="40" cy="70" r="3" fill="#FFD700"/>
+            <circle cx="60" cy="70" r="3" fill="#FFD700"/>
+            <rect x="12" y="68" width="18" height="12" rx="6" fill="#E83030"/>
+            <rect x="70" y="68" width="18" height="12" rx="6" fill="#E83030"/>
+            <circle cx="14" cy="82" r="8" fill="#FFF"/>
+            <circle cx="86" cy="82" r="8" fill="#FFF"/>
+            <rect x="30" y="104" width="16" height="20" rx="5" fill="#1A4FBF"/>
+            <rect x="54" y="104" width="16" height="20" rx="5" fill="#1A4FBF"/>
+            <rect x="26" y="118" width="22" height="10" rx="5" fill="#5C3A00"/>
+            <rect x="50" y="118" width="22" height="10" rx="5" fill="#5C3A00"/>
+            <rect x="40" y="56" width="20" height="14" rx="4" fill="#FDBCB4"/>
+            <ellipse cx="50" cy="44" rx="24" ry="22" fill="#FDBCB4"/>
+            <ellipse cx="50" cy="56" rx="20" ry="6" fill="#6B3A00"/>
+            <ellipse cx="28" cy="48" rx="5" ry="7" fill="#6B3A00"/>
+            <ellipse cx="72" cy="48" rx="5" ry="7" fill="#6B3A00"/>
+            <rect x="20" y="28" width="60" height="7" rx="3" fill="#E83030"/>
+            <rect x="28" y="10" width="44" height="22" rx="6" fill="#E83030"/>
+            <circle cx="50" cy="21" r="9" fill="#FFF"/>
+            <text x="50" y="26" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="11" font-weight="900" fill="#E83030">M</text>
+            <ellipse cx="40" cy="44" rx="5" ry="6" fill="white"/>
+            <ellipse cx="60" cy="44" rx="5" ry="6" fill="white"/>
+            <circle cx="41" cy="45" r="3" fill="#3A2000"/>
+            <circle cx="61" cy="45" r="3" fill="#3A2000"/>
+            <circle cx="42" cy="43" r="1" fill="white"/>
+            <circle cx="62" cy="43" r="1" fill="white"/>
+            <ellipse cx="50" cy="50" rx="5" ry="4" fill="#E8A090"/>
+            <ellipse cx="43" cy="54" rx="7" ry="3.5" fill="#6B3A00"/>
+            <ellipse cx="57" cy="54" rx="7" ry="3.5" fill="#6B3A00"/>
+            <ellipse cx="26" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+            <ellipse cx="74" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+          </svg>
+        </div>
+        <div class="char-card-name">HARRISON</div>
+        <div class="char-card-progress" id="harrison-progress-text">0 of 5 done</div>
+        <div class="char-card-stars" id="harrison-stars">☆☆☆☆☆</div>
+        <div class="mini-bar-wrap"><div class="mini-bar-fill mario-bar" id="harrison-mini-bar" style="width:0%"></div></div>
+        <div class="lock-badge">🔒 Your board</div>
+      </div>
+
+      <!-- Ella -->
+      <div class="char-card peach-card" id="card-ella" onclick="handleCharTap('ella')">
+        <div class="char-svg" id="home-peach-svg">
+          <!-- Peach SVG with storybook crown -->
+          <svg width="110" height="140" viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="50" cy="126" rx="22" ry="5" fill="rgba(0,0,0,0.4)"/>
+            <ellipse cx="50" cy="106" rx="34" ry="22" fill="#FF85C2"/>
+            <rect x="28" y="68" width="44" height="32" rx="8" fill="#FF85C2"/>
+            <ellipse cx="50" cy="99" rx="22" ry="16" fill="#FFA8D4"/>
+            <path d="M16 110 Q24 122 34 112 Q42 124 50 112 Q58 124 66 112 Q76 122 84 110" stroke="#FFB6D9" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <rect x="10" y="68" width="20" height="11" rx="6" fill="#FDBCB4"/>
+            <rect x="70" y="68" width="20" height="11" rx="6" fill="#FDBCB4"/>
+            <circle cx="12" cy="82" r="7" fill="#FDBCB4"/>
+            <circle cx="88" cy="82" r="7" fill="#FDBCB4"/>
+            <rect x="40" y="56" width="20" height="14" rx="4" fill="#FDBCB4"/>
+            <ellipse cx="50" cy="43" rx="24" ry="23" fill="#FDBCB4"/>
+            <ellipse cx="50" cy="28" rx="22" ry="14" fill="#FFD84D"/>
+            <ellipse cx="27" cy="48" rx="7" ry="16" fill="#FFD84D"/>
+            <ellipse cx="73" cy="48" rx="7" ry="16" fill="#FFD84D"/>
+            <!-- Storybook crown -->
+            <rect x="26" y="22" width="48" height="10" rx="5" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+            <ellipse cx="32" cy="18" rx="7" ry="9" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+            <ellipse cx="41" cy="14" rx="7" ry="10" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+            <ellipse cx="50" cy="11" rx="8" ry="12" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+            <ellipse cx="59" cy="14" rx="7" ry="10" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+            <ellipse cx="68" cy="18" rx="7" ry="9" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+            <rect x="26" y="22" width="48" height="9" rx="4" fill="#FFD700"/>
+            <circle cx="50" cy="11" r="5" fill="#FF3399" stroke="#CC0066" stroke-width="1"/>
+            <circle cx="51" cy="10" r="1.5" fill="rgba(255,255,255,0.6)"/>
+            <circle cx="41" cy="14" r="4" fill="#44AAFF" stroke="#0066CC" stroke-width="1"/>
+            <circle cx="42" cy="13" r="1.2" fill="rgba(255,255,255,0.5)"/>
+            <circle cx="59" cy="14" r="4" fill="#44DD88" stroke="#009944" stroke-width="1"/>
+            <circle cx="60" cy="13" r="1.2" fill="rgba(255,255,255,0.5)"/>
+            <circle cx="32" cy="18" r="3" fill="#CC66FF" stroke="#8800CC" stroke-width="1"/>
+            <circle cx="68" cy="18" r="3" fill="#FF6644" stroke="#CC2200" stroke-width="1"/>
+            <circle cx="36" cy="26" r="1.5" fill="white" opacity="0.7"/>
+            <circle cx="50" cy="27" r="1.5" fill="white" opacity="0.7"/>
+            <circle cx="64" cy="26" r="1.5" fill="white" opacity="0.7"/>
+            <!-- Face -->
+            <ellipse cx="32" cy="51" rx="7" ry="5" fill="#FFB3CC" opacity="0.7"/>
+            <ellipse cx="68" cy="51" rx="7" ry="5" fill="#FFB3CC" opacity="0.7"/>
+            <ellipse cx="40" cy="44" rx="6" ry="7" fill="white"/>
+            <ellipse cx="60" cy="44" rx="6" ry="7" fill="white"/>
+            <circle cx="41" cy="45" r="4" fill="#3A2000"/>
+            <circle cx="61" cy="45" r="4" fill="#3A2000"/>
+            <circle cx="42" cy="43" r="1.5" fill="white"/>
+            <circle cx="62" cy="43" r="1.5" fill="white"/>
+            <line x1="35" y1="38" x2="37" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="40" y1="37" x2="40" y2="40" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="45" y1="38" x2="43" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="55" y1="38" x2="57" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="60" y1="37" x2="60" y2="40" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="65" y1="38" x2="63" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+            <ellipse cx="50" cy="51" rx="3" ry="2" fill="#E8A090"/>
+            <path d="M43 57 Q50 64 57 57" stroke="#CC6688" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <ellipse cx="26" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+            <ellipse cx="74" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+            <ellipse cx="40" cy="124" rx="10" ry="5" fill="#FF4499"/>
+            <ellipse cx="60" cy="124" rx="10" ry="5" fill="#FF4499"/>
+          </svg>
+        </div>
+        <div class="char-card-name">ELLA</div>
+        <div class="char-card-progress" id="ella-progress-text">0 of 3 done</div>
+        <div class="char-card-stars" id="ella-stars">☆☆☆☆☆</div>
+        <div class="mini-bar-wrap"><div class="mini-bar-fill peach-bar" id="ella-mini-bar" style="width:0%"></div></div>
+        <div class="lock-badge">🔒 Your board</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: PIN
+═══════════════════════════════ -->
+<div id="screen-pin" class="screen">
+  <div id="pin-avatar-wrap" class="pin-avatar-wrap"></div>
+  <div id="pin-title" class="pin-title"></div>
+  <div id="pin-subtitle" class="pin-subtitle"></div>
+  <div class="pin-dots" id="pin-dots">
+    <div class="pin-dot" data-i="0"></div>
+    <div class="pin-dot" data-i="1"></div>
+    <div class="pin-dot" data-i="2"></div>
+    <div class="pin-dot" data-i="3"></div>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+  <div class="numpad" id="pin-numpad">
+    <button class="numpad-btn" onclick="pinKey('1')">1</button>
+    <button class="numpad-btn" onclick="pinKey('2')">2</button>
+    <button class="numpad-btn" onclick="pinKey('3')">3</button>
+    <button class="numpad-btn" onclick="pinKey('4')">4</button>
+    <button class="numpad-btn" onclick="pinKey('5')">5</button>
+    <button class="numpad-btn" onclick="pinKey('6')">6</button>
+    <button class="numpad-btn" onclick="pinKey('7')">7</button>
+    <button class="numpad-btn" onclick="pinKey('8')">8</button>
+    <button class="numpad-btn" onclick="pinKey('9')">9</button>
+    <button class="numpad-btn del-btn" onclick="pinDel()">⌫</button>
+    <button class="numpad-btn" style="grid-column:2/4" onclick="pinKey('0')">0</button>
+  </div>
+  <div class="pin-actions" id="pin-actions"></div>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: TASK
+═══════════════════════════════ -->
+<div id="screen-task" class="screen">
+  <div class="task-sidebar" id="task-sidebar">
+    <svg id="task-char-svg" class="sidebar-char" width="120" height="160" viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div class="task-main" id="task-main">
+    <button class="gear-btn" id="gear-btn" onclick="openParentPin()">⚙</button>
+    <div class="task-top-bar">
+      <div class="task-kid-name" id="task-kid-name"></div>
+      <button class="back-btn" onclick="goHome()">← BACK</button>
+    </div>
+    <div class="task-list" id="task-list"></div>
+    <div class="progress-section">
+      <div class="progress-row">
+        <div class="progress-text">PROGRESS</div>
+        <div class="progress-count" id="progress-count"></div>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: CELEBRATE
+═══════════════════════════════ -->
+<div id="screen-celebrate" class="screen" onclick="goHome()">
+  <canvas id="fireworks-canvas"></canvas>
+  <div class="celebrate-content">
+    <div class="celebrate-title" id="celebrate-title">⭐ QUEST<br>COMPLETE! ⭐</div>
+    <div class="celebrate-chars">
+      <svg class="dance-mario" width="90" height="115" viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="50" cy="126" rx="22" ry="5" fill="rgba(0,0,0,0.4)"/>
+        <rect x="28" y="72" width="44" height="36" rx="6" fill="#1A4FBF"/>
+        <rect x="24" y="68" width="52" height="14" rx="5" fill="#E83030"/>
+        <rect x="36" y="64" width="28" height="20" rx="4" fill="#1A4FBF"/>
+        <circle cx="40" cy="70" r="3" fill="#FFD700"/>
+        <circle cx="60" cy="70" r="3" fill="#FFD700"/>
+        <!-- arm raised -->
+        <rect x="10" y="52" width="18" height="12" rx="6" fill="#E83030" transform="rotate(-50 10 52)"/>
+        <rect x="70" y="68" width="18" height="12" rx="6" fill="#E83030"/>
+        <circle cx="4" cy="60" r="8" fill="#FFF"/>
+        <circle cx="86" cy="82" r="8" fill="#FFF"/>
+        <rect x="30" y="104" width="16" height="20" rx="5" fill="#1A4FBF"/>
+        <rect x="54" y="104" width="16" height="20" rx="5" fill="#1A4FBF" transform="rotate(12 54 104)"/>
+        <rect x="26" y="118" width="22" height="10" rx="5" fill="#5C3A00"/>
+        <rect x="50" y="118" width="22" height="10" rx="5" fill="#5C3A00"/>
+        <rect x="40" y="56" width="20" height="14" rx="4" fill="#FDBCB4"/>
+        <ellipse cx="50" cy="44" rx="24" ry="22" fill="#FDBCB4"/>
+        <ellipse cx="50" cy="56" rx="20" ry="6" fill="#6B3A00"/>
+        <ellipse cx="28" cy="48" rx="5" ry="7" fill="#6B3A00"/>
+        <ellipse cx="72" cy="48" rx="5" ry="7" fill="#6B3A00"/>
+        <rect x="20" y="28" width="60" height="7" rx="3" fill="#E83030"/>
+        <rect x="28" y="10" width="44" height="22" rx="6" fill="#E83030"/>
+        <circle cx="50" cy="21" r="9" fill="#FFF"/>
+        <text x="50" y="26" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="11" font-weight="900" fill="#E83030">M</text>
+        <ellipse cx="40" cy="44" rx="5" ry="6" fill="white"/>
+        <ellipse cx="60" cy="44" rx="5" ry="6" fill="white"/>
+        <circle cx="41" cy="45" r="3" fill="#3A2000"/>
+        <circle cx="61" cy="45" r="3" fill="#3A2000"/>
+        <circle cx="42" cy="43" r="1" fill="white"/>
+        <circle cx="62" cy="43" r="1" fill="white"/>
+        <ellipse cx="50" cy="50" rx="5" ry="4" fill="#E8A090"/>
+        <ellipse cx="43" cy="54" rx="7" ry="3.5" fill="#6B3A00"/>
+        <ellipse cx="57" cy="54" rx="7" ry="3.5" fill="#6B3A00"/>
+        <ellipse cx="26" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+        <ellipse cx="74" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+      </svg>
+      <svg class="dance-peach" width="90" height="115" viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="50" cy="126" rx="22" ry="5" fill="rgba(0,0,0,0.4)"/>
+        <ellipse cx="50" cy="106" rx="34" ry="22" fill="#FF85C2"/>
+        <rect x="28" y="68" width="44" height="32" rx="8" fill="#FF85C2"/>
+        <ellipse cx="50" cy="99" rx="22" ry="16" fill="#FFA8D4"/>
+        <path d="M16 110 Q24 122 34 112 Q42 124 50 112 Q58 124 66 112 Q76 122 84 110" stroke="#FFB6D9" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <!-- arm raised -->
+        <rect x="70" y="52" width="20" height="11" rx="6" fill="#FDBCB4" transform="rotate(50 70 52)"/>
+        <rect x="10" y="68" width="20" height="11" rx="6" fill="#FDBCB4"/>
+        <circle cx="96" cy="60" r="7" fill="#FDBCB4"/>
+        <circle cx="12" cy="82" r="7" fill="#FDBCB4"/>
+        <rect x="40" y="56" width="20" height="14" rx="4" fill="#FDBCB4"/>
+        <ellipse cx="50" cy="43" rx="24" ry="23" fill="#FDBCB4"/>
+        <ellipse cx="50" cy="28" rx="22" ry="14" fill="#FFD84D"/>
+        <ellipse cx="27" cy="48" rx="7" ry="16" fill="#FFD84D"/>
+        <ellipse cx="73" cy="48" rx="7" ry="16" fill="#FFD84D"/>
+        <rect x="26" y="22" width="48" height="10" rx="5" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+        <ellipse cx="32" cy="18" rx="7" ry="9" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+        <ellipse cx="41" cy="14" rx="7" ry="10" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+        <ellipse cx="50" cy="11" rx="8" ry="12" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+        <ellipse cx="59" cy="14" rx="7" ry="10" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+        <ellipse cx="68" cy="18" rx="7" ry="9" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+        <rect x="26" y="22" width="48" height="9" rx="4" fill="#FFD700"/>
+        <circle cx="50" cy="11" r="5" fill="#FF3399" stroke="#CC0066" stroke-width="1"/>
+        <circle cx="51" cy="10" r="1.5" fill="rgba(255,255,255,0.6)"/>
+        <circle cx="41" cy="14" r="4" fill="#44AAFF" stroke="#0066CC" stroke-width="1"/>
+        <circle cx="59" cy="14" r="4" fill="#44DD88" stroke="#009944" stroke-width="1"/>
+        <circle cx="32" cy="18" r="3" fill="#CC66FF" stroke="#8800CC" stroke-width="1"/>
+        <circle cx="68" cy="18" r="3" fill="#FF6644" stroke="#CC2200" stroke-width="1"/>
+        <ellipse cx="32" cy="51" rx="7" ry="5" fill="#FFB3CC" opacity="0.7"/>
+        <ellipse cx="68" cy="51" rx="7" ry="5" fill="#FFB3CC" opacity="0.7"/>
+        <ellipse cx="40" cy="44" rx="6" ry="7" fill="white"/>
+        <ellipse cx="60" cy="44" rx="6" ry="7" fill="white"/>
+        <circle cx="41" cy="45" r="4" fill="#3A2000"/>
+        <circle cx="61" cy="45" r="4" fill="#3A2000"/>
+        <circle cx="42" cy="43" r="1.5" fill="white"/>
+        <circle cx="62" cy="43" r="1.5" fill="white"/>
+        <line x1="35" y1="38" x2="37" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="40" y1="37" x2="40" y2="40" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="45" y1="38" x2="43" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="55" y1="38" x2="57" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="60" y1="37" x2="60" y2="40" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="65" y1="38" x2="63" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+        <ellipse cx="50" cy="51" rx="3" ry="2" fill="#E8A090"/>
+        <path d="M43 57 Q50 64 57 57" stroke="#CC6688" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <ellipse cx="26" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+        <ellipse cx="74" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+        <ellipse cx="40" cy="124" rx="10" ry="5" fill="#FF4499"/>
+        <ellipse cx="60" cy="124" rx="10" ry="5" fill="#FF4499"/>
+      </svg>
+    </div>
+    <div class="celebrate-stars">⭐⭐⭐⭐⭐</div>
+    <div class="celebrate-msg" id="celebrate-msg">AMAZING JOB! 🎉</div>
+    <div class="celebrate-tap">▸ TAP ANYWHERE TO CONTINUE ◂</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: PARENT EDIT
+═══════════════════════════════ -->
+<div id="screen-edit" class="screen">
+  <div class="edit-header">
+    <div class="edit-title">⚙ EDIT TASKS</div>
+    <div class="kid-tabs">
+      <button class="kid-tab active" id="tab-harrison" onclick="switchEditKid('harrison')">HARRISON</button>
+      <button class="kid-tab" id="tab-ella" onclick="switchEditKid('ella')">ELLA</button>
+    </div>
+  </div>
+  <div class="edit-list" id="edit-list"></div>
+  <button class="add-task-btn" onclick="addTask()">＋ ADD NEW TASK</button>
+  <div class="edit-footer">
+    <button class="btn-pill btn-cancel" onclick="resetKidPins()">RESET KIDS' PINS</button>
+    <button class="btn-pill btn-cyan" onclick="doneEditing()">DONE ✓</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════
+     MODAL: TASK EDIT
+═══════════════════════════════ -->
+<div class="modal-overlay" id="modal-task">
+  <div class="modal-box">
+    <div class="modal-title">EDIT TASK</div>
+    <input class="modal-input" id="modal-task-input" type="text" placeholder="Task name…" maxlength="40"/>
+    <div class="modal-actions">
+      <button class="btn-pill btn-cancel" onclick="closeTaskModal()">CANCEL</button>
+      <button class="btn-pill btn-cyan" onclick="saveTask()">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════
+     TOAST
+═══════════════════════════════ -->
+<div id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════ */
+const DEFAULT_STATE = {
+  parentPin: '2894',
+  kids: {
+    harrison: {
+      pin: null,       // null = not set yet
+      tasks: [
+        { id: 1, label: 'Brush teeth',        done: false },
+        { id: 2, label: 'Make bed',           done: false },
+        { id: 3, label: 'Reading time (20 min)', done: false },
+        { id: 4, label: 'Practice violin',    done: false },
+        { id: 5, label: 'Pick up room',       done: false },
+      ]
+    },
+    ella: {
+      pin: null,
+      tasks: [
+        { id: 1, label: 'Brush teeth',  done: false },
+        { id: 2, label: 'Get dressed',  done: false },
+        { id: 3, label: 'Pick up toys', done: false },
+      ]
+    }
+  }
+};
+
+let state;
+function loadState() {
+  try {
+    const saved = localStorage.getItem('dailyquests_v2');
+    state = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_STATE));
+    // ensure parentPin always exists (migration)
+    if (!state.parentPin) state.parentPin = '2894';
+  } catch(e) { state = JSON.parse(JSON.stringify(DEFAULT_STATE)); }
+}
+function saveState() {
+  localStorage.setItem('dailyquests_v2', JSON.stringify(state));
+}
+
+/* ═══════════════════════════════════════════
+   AUDIO ENGINE — Web Audio API, cartoon tones
+═══════════════════════════════════════════ */
+let audioCtx;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(freq, duration, type='sine', volume=0.3, delay=0) {
+  try {
+    const ctx = getAudio();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+    gain.gain.setValueAtTime(volume, ctx.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+    osc.start(ctx.currentTime + delay);
+    osc.stop(ctx.currentTime + delay + duration);
+  } catch(e) {}
+}
+
+function soundCheckbox() {
+  // Cheerful rising ding
+  playTone(523, 0.08, 'sine', 0.25);
+  playTone(659, 0.08, 'sine', 0.25, 0.08);
+  playTone(784, 0.15, 'sine', 0.25, 0.16);
+}
+
+function soundUncheck() {
+  playTone(400, 0.08, 'sine', 0.15);
+  playTone(330, 0.12, 'sine', 0.15, 0.08);
+}
+
+function soundPinKey() {
+  playTone(880, 0.05, 'sine', 0.15);
+}
+
+function soundPinError() {
+  playTone(200, 0.15, 'square', 0.2);
+  playTone(150, 0.2,  'square', 0.2, 0.15);
+}
+
+function soundPinSuccess() {
+  playTone(523, 0.1, 'sine', 0.25);
+  playTone(659, 0.1, 'sine', 0.25, 0.1);
+  playTone(784, 0.1, 'sine', 0.25, 0.2);
+  playTone(1047, 0.25, 'sine', 0.25, 0.3);
+}
+
+function soundCelebration() {
+  // Ascending fanfare
+  const notes = [523,659,784,1047,1319,1568];
+  notes.forEach((f,i) => playTone(f, 0.18, 'sine', 0.3, i*0.12));
+  // harmony
+  const harmony = [659,784,988,1319,1568,1976];
+  harmony.forEach((f,i) => playTone(f, 0.18, 'sine', 0.15, i*0.12));
+  // final chord
+  [523,659,784,1047].forEach(f => playTone(f, 0.5, 'sine', 0.2, 0.9));
+}
+
+/* ═══════════════════════════════════════════
+   SCREEN NAVIGATION
+═══════════════════════════════════════════ */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/* ═══════════════════════════════════════════
+   HOME SCREEN
+═══════════════════════════════════════════ */
+function updateHomeCards() {
+  ['harrison','ella'].forEach(kid => {
+    const tasks = state.kids[kid].tasks;
+    const done  = tasks.filter(t => t.done).length;
+    const total = tasks.length;
+    const pct   = total ? Math.round(done/total*100) : 0;
+
+    document.getElementById(`${kid}-progress-text`).textContent = `${done} of ${total} done`;
+    document.getElementById(`${kid}-mini-bar`).style.width = pct + '%';
+
+    // stars (1-5 scale)
+    const stars = total ? Math.round((done/total)*5) : 0;
+    const starStr = '⭐'.repeat(stars) + '☆'.repeat(5-stars);
+    document.getElementById(`${kid}-stars`).textContent = starStr;
+  });
+}
+
+/* ═══════════════════════════════════════════
+   PIN SYSTEM
+═══════════════════════════════════════════ */
+let pinState = {
+  mode: '',       // 'kid-setup', 'kid-enter', 'parent-enter'
+  kid: '',        // 'harrison' | 'ella'
+  entered: '',
+  confirm: '',
+  step: 'enter',  // 'enter' | 'confirm'
+};
+
+const MARIO_HEAD_SVG = `<svg width="70" height="65" viewBox="10 20 80 60" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="50" cy="44" rx="24" ry="22" fill="#FDBCB4"/>
+  <ellipse cx="50" cy="56" rx="20" ry="6" fill="#6B3A00"/>
+  <ellipse cx="28" cy="48" rx="5" ry="7" fill="#6B3A00"/>
+  <ellipse cx="72" cy="48" rx="5" ry="7" fill="#6B3A00"/>
+  <rect x="20" y="28" width="60" height="7" rx="3" fill="#E83030"/>
+  <rect x="28" y="10" width="44" height="22" rx="6" fill="#E83030"/>
+  <circle cx="50" cy="21" r="9" fill="#FFF"/>
+  <text x="50" y="26" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="11" font-weight="900" fill="#E83030">M</text>
+  <ellipse cx="40" cy="44" rx="5" ry="6" fill="white"/>
+  <ellipse cx="60" cy="44" rx="5" ry="6" fill="white"/>
+  <circle cx="41" cy="45" r="3" fill="#3A2000"/>
+  <circle cx="61" cy="45" r="3" fill="#3A2000"/>
+  <circle cx="42" cy="43" r="1" fill="white"/>
+  <circle cx="62" cy="43" r="1" fill="white"/>
+  <ellipse cx="50" cy="50" rx="5" ry="4" fill="#E8A090"/>
+  <ellipse cx="43" cy="54" rx="7" ry="3.5" fill="#6B3A00"/>
+  <ellipse cx="57" cy="54" rx="7" ry="3.5" fill="#6B3A00"/>
+  <ellipse cx="26" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+  <ellipse cx="74" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+</svg>`;
+
+const PEACH_HEAD_SVG = `<svg width="70" height="75" viewBox="10 5 80 75" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="50" cy="43" rx="24" ry="23" fill="#FDBCB4"/>
+  <ellipse cx="50" cy="28" rx="22" ry="14" fill="#FFD84D"/>
+  <ellipse cx="27" cy="48" rx="7" ry="16" fill="#FFD84D"/>
+  <ellipse cx="73" cy="48" rx="7" ry="16" fill="#FFD84D"/>
+  <rect x="26" y="22" width="48" height="10" rx="5" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <ellipse cx="32" cy="18" rx="7" ry="9" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <ellipse cx="41" cy="14" rx="7" ry="10" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <ellipse cx="50" cy="11" rx="8" ry="12" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <ellipse cx="59" cy="14" rx="7" ry="10" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <ellipse cx="68" cy="18" rx="7" ry="9" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <rect x="26" y="22" width="48" height="8" rx="3" fill="#FFD700"/>
+  <circle cx="50" cy="11" r="4" fill="#FF3399"/>
+  <circle cx="41" cy="14" r="3" fill="#44AAFF"/>
+  <circle cx="59" cy="14" r="3" fill="#44DD88"/>
+  <circle cx="32" cy="18" r="2.5" fill="#CC66FF"/>
+  <circle cx="68" cy="18" r="2.5" fill="#FF6644"/>
+  <ellipse cx="32" cy="51" rx="7" ry="5" fill="#FFB3CC" opacity="0.7"/>
+  <ellipse cx="68" cy="51" rx="7" ry="5" fill="#FFB3CC" opacity="0.7"/>
+  <ellipse cx="40" cy="44" rx="6" ry="7" fill="white"/>
+  <ellipse cx="60" cy="44" rx="6" ry="7" fill="white"/>
+  <circle cx="41" cy="45" r="4" fill="#3A2000"/>
+  <circle cx="61" cy="45" r="4" fill="#3A2000"/>
+  <circle cx="42" cy="43" r="1.5" fill="white"/>
+  <circle cx="62" cy="43" r="1.5" fill="white"/>
+  <ellipse cx="50" cy="51" rx="3" ry="2" fill="#E8A090"/>
+  <path d="M43 57 Q50 64 57 57" stroke="#CC6688" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>`;
+
+const PARENT_ICON_SVG = `<div style="font-size:52px;line-height:1">🔐</div>`;
+
+function openKidPin(kid) {
+  const hasPin = !!state.kids[kid].pin;
+  pinState.kid    = kid;
+  pinState.mode   = hasPin ? 'kid-enter' : 'kid-setup';
+  pinState.step   = 'enter';
+  pinState.entered = '';
+  pinState.confirm = '';
+
+  const isHarrison = kid === 'harrison';
+  const color = isHarrison ? 'gold' : 'pink';
+
+  // avatar
+  document.getElementById('pin-avatar-wrap').innerHTML = isHarrison ? MARIO_HEAD_SVG : PEACH_HEAD_SVG;
+
+  // title & subtitle
+  const nameDisplay = isHarrison ? 'HARRISON' : 'ELLA';
+  if (!hasPin) {
+    document.getElementById('pin-title').textContent = `HEY ${nameDisplay}!`;
+    document.getElementById('pin-title').style.color = isHarrison ? 'var(--gold)' : 'var(--pink)';
+    document.getElementById('pin-subtitle').textContent = 'Create your secret PIN so only YOU can use your quest board.';
+  } else {
+    document.getElementById('pin-title').textContent = `${nameDisplay}'S BOARD ${isHarrison ? '🎮' : '👑'}`;
+    document.getElementById('pin-title').style.color = isHarrison ? 'var(--gold)' : 'var(--pink)';
+    document.getElementById('pin-subtitle').textContent = 'Enter your secret PIN to get in!';
+  }
+
+  // dots
+  stylePinDots(color);
+  updatePinDots(0);
+  document.getElementById('pin-error').textContent = '';
+
+  // actions
+  document.getElementById('pin-actions').innerHTML = `
+    <button class="btn-pill btn-cancel" onclick="goHome()">CANCEL</button>
+    <button class="btn-pill btn-${color}" id="pin-confirm-btn" onclick="pinConfirm()" style="display:none">CONFIRM ✓</button>
+  `;
+
+  showScreen('screen-pin');
+}
+
+function openParentPin() {
+  pinState.mode = 'parent-enter';
+  pinState.entered = '';
+  pinState.kid = '';
+
+  document.getElementById('pin-avatar-wrap').innerHTML = PARENT_ICON_SVG;
+  document.getElementById('pin-title').textContent = 'PARENT MODE';
+  document.getElementById('pin-title').style.color = 'var(--cyan)';
+  document.getElementById('pin-subtitle').textContent = 'Enter your parent PIN to edit tasks.';
+
+  stylePinDots('cyan');
+  updatePinDots(0);
+  document.getElementById('pin-error').textContent = '';
+
+  document.getElementById('pin-actions').innerHTML = `
+    <button class="btn-pill btn-cancel" onclick="goTaskFromPin()">CANCEL</button>
+  `;
+
+  showScreen('screen-pin');
+}
+
+function stylePinDots(color) {
+  document.querySelectorAll('.pin-dot').forEach(d => {
+    d.className = `pin-dot ${color}`;
+  });
+}
+
+function updatePinDots(count) {
+  document.querySelectorAll('.pin-dot').forEach((d, i) => {
+    if (i < count) d.classList.add('filled');
+    else d.classList.remove('filled');
+  });
+}
+
+function pinKey(digit) {
+  soundPinKey();
+  const current = pinState.step === 'confirm' ? pinState.confirm : pinState.entered;
+  if (current.length >= 4) return;
+
+  if (pinState.step === 'confirm') {
+    pinState.confirm += digit;
+    updatePinDots(pinState.confirm.length);
+    if (pinState.confirm.length === 4) setTimeout(pinConfirm, 150);
+  } else {
+    pinState.entered += digit;
+    updatePinDots(pinState.entered.length);
+    if (pinState.entered.length === 4) setTimeout(pinConfirm, 150);
+  }
+}
+
+function pinDel() {
+  if (pinState.step === 'confirm') {
+    pinState.confirm = pinState.confirm.slice(0,-1);
+    updatePinDots(pinState.confirm.length);
+  } else {
+    pinState.entered = pinState.entered.slice(0,-1);
+    updatePinDots(pinState.entered.length);
+  }
+}
+
+function pinConfirm() {
+  const { mode, kid, entered, confirm, step } = pinState;
+  document.getElementById('pin-error').textContent = '';
+
+  if (mode === 'kid-setup') {
+    if (step === 'enter') {
+      if (entered.length < 4) { showPinError('Enter 4 digits!'); return; }
+      // move to confirm step
+      pinState.step = 'confirm';
+      pinState.confirm = '';
+      document.getElementById('pin-subtitle').textContent = 'Enter it again to confirm!';
+      updatePinDots(0);
+      return;
+    } else {
+      // confirm step
+      if (confirm !== entered) {
+        soundPinError();
+        showPinError("PINs don't match! Try again.");
+        pinState.step = 'enter';
+        pinState.entered = '';
+        pinState.confirm = '';
+        updatePinDots(0);
+        document.getElementById('pin-subtitle').textContent = 'Create your secret PIN so only YOU can use your quest board.';
+        return;
+      }
+      // save PIN
+      state.kids[kid].pin = entered;
+      saveState();
+      soundPinSuccess();
+      showToast('PIN set! 🎉');
+      setTimeout(() => openTaskScreen(kid), 400);
+      return;
+    }
+  }
+
+  if (mode === 'kid-enter') {
+    if (entered.length < 4) { showPinError('Enter 4 digits!'); return; }
+    if (entered === state.kids[kid].pin) {
+      soundPinSuccess();
+      setTimeout(() => openTaskScreen(kid), 200);
+    } else {
+      soundPinError();
+      showPinError('Wrong PIN! Try again.');
+      shakePinDots();
+      pinState.entered = '';
+      updatePinDots(0);
+    }
+    return;
+  }
+
+  if (mode === 'parent-enter') {
+    if (entered.length < 4) { showPinError('Enter 4 digits!'); return; }
+    if (entered === state.parentPin) {
+      soundPinSuccess();
+      setTimeout(() => openEditScreen(), 200);
+    } else {
+      soundPinError();
+      showPinError('Wrong PIN! Try again.');
+      shakePinDots();
+      pinState.entered = '';
+      updatePinDots(0);
+    }
+    return;
+  }
+}
+
+function showPinError(msg) {
+  const el = document.getElementById('pin-error');
+  el.textContent = msg;
+}
+
+function shakePinDots() {
+  const wrap = document.getElementById('pin-dots');
+  wrap.style.animation = 'none';
+  wrap.offsetHeight; // reflow
+  wrap.style.animation = 'shake 0.4s ease';
+  setTimeout(() => wrap.style.animation = '', 400);
+}
+
+function goTaskFromPin() {
+  // from parent pin cancel — go back to task screen
+  if (currentKid) showScreen('screen-task');
+  else goHome();
+}
+
+/* ═══════════════════════════════════════════
+   CHAR TAP HANDLER
+═══════════════════════════════════════════ */
+function handleCharTap(kid) {
+  currentKid = kid;
+  openKidPin(kid);
+}
+
+/* ═══════════════════════════════════════════
+   TASK SCREEN
+═══════════════════════════════════════════ */
+let currentKid = '';
+
+const MARIO_SIDEBAR_SVG = `<ellipse cx="50" cy="126" rx="22" ry="5" fill="rgba(0,0,0,0.4)"/>
+<rect x="28" y="72" width="44" height="36" rx="6" fill="#1A4FBF"/>
+<rect x="24" y="68" width="52" height="14" rx="5" fill="#E83030"/>
+<rect x="36" y="64" width="28" height="20" rx="4" fill="#1A4FBF"/>
+<circle cx="40" cy="70" r="3" fill="#FFD700"/><circle cx="60" cy="70" r="3" fill="#FFD700"/>
+<rect x="12" y="68" width="18" height="12" rx="6" fill="#E83030"/>
+<rect x="70" y="68" width="18" height="12" rx="6" fill="#E83030"/>
+<circle cx="14" cy="82" r="8" fill="#FFF"/><circle cx="86" cy="82" r="8" fill="#FFF"/>
+<rect x="30" y="104" width="16" height="20" rx="5" fill="#1A4FBF"/>
+<rect x="54" y="104" width="16" height="20" rx="5" fill="#1A4FBF"/>
+<rect x="26" y="118" width="22" height="10" rx="5" fill="#5C3A00"/>
+<rect x="50" y="118" width="22" height="10" rx="5" fill="#5C3A00"/>
+<rect x="40" y="56" width="20" height="14" rx="4" fill="#FDBCB4"/>
+<ellipse cx="50" cy="44" rx="24" ry="22" fill="#FDBCB4"/>
+<ellipse cx="50" cy="56" rx="20" ry="6" fill="#6B3A00"/>
+<ellipse cx="28" cy="48" rx="5" ry="7" fill="#6B3A00"/><ellipse cx="72" cy="48" rx="5" ry="7" fill="#6B3A00"/>
+<rect x="20" y="28" width="60" height="7" rx="3" fill="#E83030"/>
+<rect x="28" y="10" width="44" height="22" rx="6" fill="#E83030"/>
+<circle cx="50" cy="21" r="9" fill="#FFF"/>
+<text x="50" y="26" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="11" font-weight="900" fill="#E83030">M</text>
+<ellipse cx="40" cy="44" rx="5" ry="6" fill="white"/><ellipse cx="60" cy="44" rx="5" ry="6" fill="white"/>
+<circle cx="41" cy="45" r="3" fill="#3A2000"/><circle cx="61" cy="45" r="3" fill="#3A2000"/>
+<circle cx="42" cy="43" r="1" fill="white"/><circle cx="62" cy="43" r="1" fill="white"/>
+<ellipse cx="50" cy="50" rx="5" ry="4" fill="#E8A090"/>
+<ellipse cx="43" cy="54" rx="7" ry="3.5" fill="#6B3A00"/><ellipse cx="57" cy="54" rx="7" ry="3.5" fill="#6B3A00"/>
+<ellipse cx="26" cy="44" rx="4" ry="5" fill="#FDBCB4"/><ellipse cx="74" cy="44" rx="4" ry="5" fill="#FDBCB4"/>`;
+
+const PEACH_SIDEBAR_SVG = `<ellipse cx="50" cy="126" rx="22" ry="5" fill="rgba(0,0,0,0.4)"/>
+<ellipse cx="50" cy="106" rx="34" ry="22" fill="#FF85C2"/>
+<rect x="28" y="68" width="44" height="32" rx="8" fill="#FF85C2"/>
+<ellipse cx="50" cy="99" rx="22" ry="16" fill="#FFA8D4"/>
+<path d="M16 110 Q24 122 34 112 Q42 124 50 112 Q58 124 66 112 Q76 122 84 110" stroke="#FFB6D9" stroke-width="3" fill="none" stroke-linecap="round"/>
+<rect x="10" y="68" width="20" height="11" rx="6" fill="#FDBCB4"/><rect x="70" y="68" width="20" height="11" rx="6" fill="#FDBCB4"/>
+<circle cx="12" cy="82" r="7" fill="#FDBCB4"/><circle cx="88" cy="82" r="7" fill="#FDBCB4"/>
+<rect x="40" y="56" width="20" height="14" rx="4" fill="#FDBCB4"/>
+<ellipse cx="50" cy="43" rx="24" ry="23" fill="#FDBCB4"/>
+<ellipse cx="50" cy="28" rx="22" ry="14" fill="#FFD84D"/>
+<ellipse cx="27" cy="48" rx="7" ry="16" fill="#FFD84D"/><ellipse cx="73" cy="48" rx="7" ry="16" fill="#FFD84D"/>
+<rect x="26" y="22" width="48" height="10" rx="5" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+<ellipse cx="32" cy="18" rx="7" ry="9" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+<ellipse cx="41" cy="14" rx="7" ry="10" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+<ellipse cx="50" cy="11" rx="8" ry="12" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+<ellipse cx="59" cy="14" rx="7" ry="10" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+<ellipse cx="68" cy="18" rx="7" ry="9" fill="#FFD700" stroke="#FFA500" stroke-width="1.5"/>
+<rect x="26" y="22" width="48" height="9" rx="4" fill="#FFD700"/>
+<circle cx="50" cy="11" r="5" fill="#FF3399" stroke="#CC0066" stroke-width="1"/>
+<circle cx="51" cy="10" r="1.5" fill="rgba(255,255,255,0.6)"/>
+<circle cx="41" cy="14" r="4" fill="#44AAFF" stroke="#0066CC" stroke-width="1"/>
+<circle cx="59" cy="14" r="4" fill="#44DD88" stroke="#009944" stroke-width="1"/>
+<circle cx="32" cy="18" r="3" fill="#CC66FF" stroke="#8800CC" stroke-width="1"/>
+<circle cx="68" cy="18" r="3" fill="#FF6644" stroke="#CC2200" stroke-width="1"/>
+<circle cx="36" cy="26" r="1.5" fill="white" opacity="0.7"/>
+<circle cx="50" cy="27" r="1.5" fill="white" opacity="0.7"/>
+<circle cx="64" cy="26" r="1.5" fill="white" opacity="0.7"/>
+<ellipse cx="32" cy="51" rx="7" ry="5" fill="#FFB3CC" opacity="0.7"/>
+<ellipse cx="68" cy="51" rx="7" ry="5" fill="#FFB3CC" opacity="0.7"/>
+<ellipse cx="40" cy="44" rx="6" ry="7" fill="white"/><ellipse cx="60" cy="44" rx="6" ry="7" fill="white"/>
+<circle cx="41" cy="45" r="4" fill="#3A2000"/><circle cx="61" cy="45" r="4" fill="#3A2000"/>
+<circle cx="42" cy="43" r="1.5" fill="white"/><circle cx="62" cy="43" r="1.5" fill="white"/>
+<line x1="35" y1="38" x2="37" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+<line x1="40" y1="37" x2="40" y2="40" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+<line x1="45" y1="38" x2="43" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+<line x1="55" y1="38" x2="57" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+<line x1="60" y1="37" x2="60" y2="40" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+<line x1="65" y1="38" x2="63" y2="41" stroke="#3A2000" stroke-width="1.5" stroke-linecap="round"/>
+<ellipse cx="50" cy="51" rx="3" ry="2" fill="#E8A090"/>
+<path d="M43 57 Q50 64 57 57" stroke="#CC6688" stroke-width="2" fill="none" stroke-linecap="round"/>
+<ellipse cx="26" cy="44" rx="4" ry="5" fill="#FDBCB4"/><ellipse cx="74" cy="44" rx="4" ry="5" fill="#FDBCB4"/>
+<ellipse cx="40" cy="124" rx="10" ry="5" fill="#FF4499"/><ellipse cx="60" cy="124" rx="10" ry="5" fill="#FF4499"/>`;
+
+function openTaskScreen(kid) {
+  currentKid = kid;
+  const isHarrison = kid === 'harrison';
+
+  // sidebar
+  const sidebar = document.getElementById('task-sidebar');
+  sidebar.className = `task-sidebar ${isHarrison ? 'mario-side' : 'peach-side'}`;
+  document.getElementById('task-char-svg').innerHTML = isHarrison ? MARIO_SIDEBAR_SVG : PEACH_SIDEBAR_SVG;
+
+  // name
+  const nameEl = document.getElementById('task-kid-name');
+  nameEl.textContent = isHarrison ? 'HARRISON' : 'ELLA';
+  nameEl.className = `task-kid-name ${isHarrison ? 'gold' : 'pink'}`;
+
+  // progress bar class
+  document.getElementById('progress-fill').className = `progress-fill ${isHarrison ? 'mario-prog' : 'peach-prog'}`;
+  document.getElementById('progress-count').className = `progress-count ${isHarrison ? 'gold' : 'pink'}`;
+
+  renderTaskList();
+  showScreen('screen-task');
+}
+
+function renderTaskList() {
+  const kid = currentKid;
+  const isHarrison = kid === 'harrison';
+  const tasks = state.kids[kid].tasks;
+  const list  = document.getElementById('task-list');
+
+  list.innerHTML = '';
+  tasks.forEach((task, idx) => {
+    const div = document.createElement('div');
+    div.className = `task-item ${task.done ? 'completed ' + (isHarrison ? 'mario-theme' : 'peach-theme') : ''}`;
+    div.style.animationDelay = `${idx * 0.05}s`;
+    div.innerHTML = `
+      <div class="task-check ${isHarrison ? 'mario-check' : 'peach-check'} ${task.done ? 'checked' : ''}">${task.done ? '✓' : ''}</div>
+      <div class="task-label">${task.label}</div>
+    `;
+    div.onclick = () => toggleTask(idx);
+    list.appendChild(div);
+  });
+
+  updateProgress();
+}
+
+function toggleTask(idx) {
+  const tasks = state.kids[currentKid].tasks;
+  tasks[idx].done = !tasks[idx].done;
+
+  if (tasks[idx].done) soundCheckbox();
+  else soundUncheck();
+
+  saveState();
+  renderTaskList();
+  updateHomeCards();
+
+  // check for completion
+  const allDone = tasks.every(t => t.done);
+  if (allDone) {
+    setTimeout(() => openCelebrate(currentKid), 400);
+  }
+}
+
+function updateProgress() {
+  const tasks = state.kids[currentKid].tasks;
+  const done  = tasks.filter(t => t.done).length;
+  const total = tasks.length;
+  const pct   = total ? Math.round(done/total*100) : 0;
+
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-count').textContent = `${done} / ${total}`;
+}
+
+/* ═══════════════════════════════════════════
+   CELEBRATE SCREEN
+═══════════════════════════════════════════ */
+let fireworksAnim;
+let confettiPieces = [];
+
+function openCelebrate(kid) {
+  const isHarrison = kid === 'harrison';
+  document.getElementById('celebrate-title').innerHTML = isHarrison
+    ? '⭐ QUEST<br>COMPLETE! ⭐'
+    : '👑 QUEST<br>COMPLETE! 👑';
+  document.getElementById('celebrate-msg').textContent = isHarrison
+    ? 'AMAZING JOB HARRISON! 🎉'
+    : 'AMAZING JOB ELLA! 🌸';
+
+  soundCelebration();
+  showScreen('screen-celebrate');
+  startFireworks();
+  spawnConfetti();
+}
+
+/* Fireworks canvas */
+function startFireworks() {
+  const canvas = document.getElementById('fireworks-canvas');
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  const particles = [];
+
+  function Particle(x, y, color) {
+    this.x = x; this.y = y;
+    this.color = color;
+    this.vx = (Math.random()-0.5) * 8;
+    this.vy = (Math.random()-0.5) * 8 - 3;
+    this.alpha = 1;
+    this.radius = Math.random() * 3 + 1;
+    this.gravity = 0.12;
+  }
+
+  function burst(x, y) {
+    const colors = ['#FFD700','#FF85C2','#00E5FF','#FFFFFF','#FF4499','#44FF88','#FF6644'];
+    for (let i=0; i<50; i++) {
+      particles.push(new Particle(x, y, colors[Math.floor(Math.random()*colors.length)]));
+    }
+  }
+
+  let lastBurst = 0;
+  function loop(ts) {
+    ctx.fillStyle = 'rgba(7,7,16,0.18)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (ts - lastBurst > 600) {
+      burst(Math.random()*canvas.width, Math.random()*canvas.height*0.6);
+      lastBurst = ts;
+    }
+
+    for (let i = particles.length-1; i >= 0; i--) {
+      const p = particles[i];
+      p.vy += p.gravity;
+      p.x += p.vx; p.y += p.vy;
+      p.alpha -= 0.018;
+      if (p.alpha <= 0) { particles.splice(i,1); continue; }
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+    fireworksAnim = requestAnimationFrame(loop);
+  }
+  if (fireworksAnim) cancelAnimationFrame(fireworksAnim);
+  fireworksAnim = requestAnimationFrame(loop);
+}
+
+function spawnConfetti() {
+  // clear existing
+  document.querySelectorAll('.confetti').forEach(e => e.remove());
+  const colors = ['#FFD700','#FF85C2','#00E5FF','#FF4499','#44FF88','#FF6644','#FFFFFF'];
+  const screen = document.getElementById('screen-celebrate');
+  for (let i=0; i<30; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    el.style.cssText = `
+      left:${Math.random()*100}%;
+      top:-20px;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      width:${Math.random()*10+5}px;
+      height:${Math.random()*10+5}px;
+      border-radius:${Math.random()>0.5 ? '50%' : '2px'};
+      animation: confettiFall ${Math.random()*2+2}s ${Math.random()*2}s linear forwards;
+      transform: rotate(${Math.random()*360}deg);
+    `;
+    screen.appendChild(el);
+  }
+}
+
+// inject confetti animation
+const style = document.createElement('style');
+style.textContent = `
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg);   opacity:1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity:0.3; }
+}`;
+document.head.appendChild(style);
+
+function goHome() {
+  if (fireworksAnim) { cancelAnimationFrame(fireworksAnim); fireworksAnim = null; }
+  const canvas = document.getElementById('fireworks-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  document.querySelectorAll('.confetti').forEach(e => e.remove());
+  updateHomeCards();
+  showScreen('screen-home');
+}
+
+/* ═══════════════════════════════════════════
+   EDIT SCREEN
+═══════════════════════════════════════════ */
+let editKid = 'harrison';
+
+function openEditScreen() {
+  editKid = 'harrison';
+  document.getElementById('tab-harrison').classList.add('active');
+  document.getElementById('tab-ella').classList.remove('active');
+  renderEditList();
+  showScreen('screen-edit');
+}
+
+function switchEditKid(kid) {
+  editKid = kid;
+  document.getElementById('tab-harrison').classList.toggle('active', kid==='harrison');
+  document.getElementById('tab-ella').classList.toggle('active', kid==='ella');
+  renderEditList();
+}
+
+function renderEditList() {
+  const tasks = state.kids[editKid].tasks;
+  const list  = document.getElementById('edit-list');
+  list.innerHTML = '';
+  tasks.forEach((task, idx) => {
+    const row = document.createElement('div');
+    row.className = 'edit-row';
+    row.style.animationDelay = `${idx*0.04}s`;
+    row.innerHTML = `
+      <span class="edit-row-label">${task.label}</span>
+      <button class="icon-btn" onclick="editTask(${idx})" title="Edit">✏️</button>
+      <button class="icon-btn" onclick="deleteTask(${idx})" title="Delete">🗑️</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+/* task modal */
+let editingIdx = -1;
+function editTask(idx) {
+  editingIdx = idx;
+  document.getElementById('modal-task-input').value = state.kids[editKid].tasks[idx].label;
+  document.getElementById('modal-task').classList.add('open');
+  setTimeout(() => document.getElementById('modal-task-input').focus(), 100);
+}
+
+function addTask() {
+  editingIdx = -1;
+  document.getElementById('modal-task-input').value = '';
+  document.getElementById('modal-task').classList.add('open');
+  setTimeout(() => document.getElementById('modal-task-input').focus(), 100);
+}
+
+function closeTaskModal() {
+  document.getElementById('modal-task').classList.remove('open');
+}
+
+function saveTask() {
+  const val = document.getElementById('modal-task-input').value.trim();
+  if (!val) return;
+  const tasks = state.kids[editKid].tasks;
+  if (editingIdx >= 0) {
+    tasks[editingIdx].label = val;
+  } else {
+    tasks.push({ id: Date.now(), label: val, done: false });
+  }
+  saveState();
+  closeTaskModal();
+  renderEditList();
+  showToast('Task saved ✓');
+}
+
+function deleteTask(idx) {
+  const tasks = state.kids[editKid].tasks;
+  if (tasks.length <= 1) { showToast('Need at least 1 task!'); return; }
+  tasks.splice(idx, 1);
+  saveState();
+  renderEditList();
+  showToast('Task removed');
+}
+
+function doneEditing() {
+  // go back to whichever kid's task screen we came from, or home
+  if (currentKid) openTaskScreen(currentKid);
+  else goHome();
+}
+
+function resetKidPins() {
+  if (confirm('Reset both kids\' PINs? They will need to set new ones.')) {
+    state.kids.harrison.pin = null;
+    state.kids.ella.pin = null;
+    saveState();
+    showToast('Kids\' PINs reset ✓');
+  }
+}
+
+// Enter key in modal
+document.getElementById('modal-task-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveTask();
+  if (e.key === 'Escape') closeTaskModal();
+});
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ═══════════════════════════════════════════
+   RESIZE fireworks canvas
+═══════════════════════════════════════════ */
+window.addEventListener('resize', () => {
+  const canvas = document.getElementById('fireworks-canvas');
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+/* ═══════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════ */
+loadState();
+updateHomeCards();
+</script>
+</body>
+</html>
